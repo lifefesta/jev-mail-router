@@ -1,0 +1,32 @@
+{
+  "name": "jev-mail-router",
+  "version": "0.1.0",
+  "description": "Gmail email router using TypeSafe AI Jev (System One) for async customer support",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/tests/**/*.test.js",
+    "test:fixture": "node dist/tests/fixture-pipeline.test.js",
+    "pipeline": "node dist/pipeline.js",
+    "pretest": "npm run build"
+  },
+  "keywords": [
+    "gmail",
+    "typesafe",
+    "jev",
+    "email-routing",
+    "customer-support"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
