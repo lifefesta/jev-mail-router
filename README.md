@@ -182,6 +182,44 @@ TYPESAFE_API_KEY=your-api-key-here
 USE_STUB=false
 ```
 
+**API スキーマ:**
+
+本実装は TypeSafe の System One API の正式な Choice 型質問スキーマを使用しています：
+
+```typescript
+POST https://api.typesafe.ai/v1/systemone
+{
+  model: "jev-latest",
+  state: { subject, snippet, from_domain, labels },
+  questions: {
+    intent: {
+      type: "choice",
+      instructions: "What is the primary intent...",
+      criteria: { option1: "description", ... }
+    },
+    // ... other questions
+  }
+}
+
+Response:
+{
+  model: "jev-latest",
+  answers: {
+    intent: {
+      type: "choice",
+      choice: "shipping",
+      confidence: 0.95,
+      probabilities: { shipping: 0.95, ... }
+    }
+  },
+  usage: { input_tokens, output_tokens }
+}
+```
+
+参考:
+- [Choice 型質問](https://docs.typesafe.ai/primitives/choice.md)
+- [API リファレンス](https://docs.typesafe.ai/api.md)
+
 ### Google Sheets 設定
 
 1. Google Sheets でスプレッドシートを作成
