@@ -50,16 +50,19 @@ export class Pipeline {
 
     // Gmail クライアント初期化（オプショナル）
     if (this.config.gmailUser) {
+      const authConfig = GmailClient.buildAuthConfigFromEnv();
       this.gmailClient = new GmailClient({
-        user: this.config.gmailUser
-      });
+        user: this.config.gmailUser,
+        limit: parseInt(process.env.LIVE_LIMIT || '5')
+      }, authConfig);
     }
 
     // Sheets クライアント初期化（常に作成、未設定時はフォールバック）
+    const authConfig = SheetsClient.buildAuthConfigFromEnv();
     this.sheetsClient = new SheetsClient({
       spreadsheetId: this.config.sheetsSpreadsheetId,
       range: this.config.sheetsRange
-    });
+    }, authConfig);
   }
 
   /**
@@ -201,6 +204,60 @@ export class Pipeline {
   }
 
   /**
+   * メールを処理してラベルを付与
+   */
+  async processEmailWithLabels(email: EmailData): Promise<ProcessingResult> {
+    const result = await this.processEmail(email);
+    
+    // Gmail ラベルを付与（Gmail クライアントが有効な場合のみ）
+    if (this.gmailClient && !result.error) {
+      try {
+        const labels: string[] = [];
+        
+        // intent ラベル
+        if (result.sheetRow.intent) {
+          labels.push(`jev/intent/${result.sheetRow.intent}`);
+        }
+        
+        // escalate ラベル
+        if (result.sheetRow.escalate === 'yes') {
+          labels.push('jev/escalate');
+        }
+        
+        // 処理済みラベル
+        labels.push('jev-processed');
+        
+        await this.gmailClient.addLabels(email.gmail_id, labels);
+        console.log(`✓ Labels applied: ${labels.join(', ')}`);
+      } catch (error) {
+        console.warn(`Failed to apply labels: ${error}`);
+      }
+    }
+    
+    return result;
+  }
+
+  /**
+   * Gmail から未処理メールを取得して処理
+   */
+  async processFromGmail(): Promise<ProcessingResult[]> {
+    if (!this.gmailClient) {
+      throw new Error('Gmail client not configured. Set GMAIL_USER and auth credentials.');
+    }
+
+    const emails = await this.gmailClient.getUnprocessedEmails();
+    console.log(`Found ${emails.length} unprocessed emails`);
+
+    const results: ProcessingResult[] = [];
+    for (const email of emails) {
+      const result = await this.processEmailWithLabels(email);
+      results.push(result);
+    }
+
+    return results;
+  }
+
+  /**
    * バッチ処理
    */
   async processBatch(emails: EmailData[]): Promise<ProcessingResult[]> {
@@ -208,6 +265,20 @@ export class Pipeline {
     
     for (const email of emails) {
       const result = await this.processEmail(email);
+      results.push(result);
+    }
+
+    return results;
+  }
+
+  /**
+   * バッチ処理（ラベル付与あり）
+   */
+  async processBatchWithLabels(emails: EmailData[]): Promise<ProcessingResult[]> {
+    const results: ProcessingResult[] = [];
+    
+    for (const email of emails) {
+      const result = await this.processEmailWithLabels(email);
       results.push(result);
     }
 

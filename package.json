@@ -9,6 +9,8 @@
     "test": "node --test dist/tests/**/*.test.js",
     "test:fixture": "node dist/tests/fixture-pipeline.test.js",
     "pipeline": "node dist/pipeline.js",
+    "pipeline:fixture": "node dist/pipeline.js",
+    "pipeline:live": "node dist/pipeline-live.js",
     "pretest": "npm run build"
   },
   "keywords": [
@@ -24,7 +26,8 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "dotenv": "^16.0.0"
+    "dotenv": "^16.0.0",
+    "googleapis": "^181.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
