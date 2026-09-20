@@ -4,6 +4,8 @@
  * 未設定時はローカル JSON/CSV にフォールバック
  */
 
+import { google } from 'googleapis';
+import type { OAuth2Client } from 'google-auth-library';
 import type { SheetRow } from '../types.js';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
@@ -13,15 +15,68 @@ export interface SheetsClientConfig {
   range?: string;
 }
 
+interface AuthConfig {
+  serviceAccountJson?: string;
+  serviceAccountPath?: string;
+  clientId?: string;
+  clientSecret?: string;
+  refreshToken?: string;
+}
+
 export class SheetsClient {
   private spreadsheetId?: string;
   private range: string;
   private fallbackMode: boolean;
+  private auth?: OAuth2Client;
+  private sheets?: ReturnType<typeof google.sheets>;
 
-  constructor(config: SheetsClientConfig) {
+  constructor(config: SheetsClientConfig, authConfig?: AuthConfig) {
     this.spreadsheetId = config.spreadsheetId;
     this.range = config.range || 'Sheet1!A1';
     this.fallbackMode = !this.spreadsheetId;
+    
+    if (!this.fallbackMode && authConfig) {
+      this.initAuth(authConfig);
+    }
+  }
+
+  /**
+   * 認証クライアントの初期化
+   */
+  private initAuth(authConfig: AuthConfig): void {
+    try {
+      if (authConfig.serviceAccountJson) {
+        // サービスアカウント JSON (文字列)
+        const credentials = JSON.parse(authConfig.serviceAccountJson);
+        this.auth = new google.auth.JWT({
+          email: credentials.client_email,
+          key: credentials.private_key,
+          scopes: ['https://www.googleapis.com/auth/spreadsheets']
+        }) as unknown as OAuth2Client;
+      } else if (authConfig.serviceAccountPath) {
+        // サービスアカウント JSON (ファイルパス)
+        const auth = new google.auth.GoogleAuth({
+          keyFile: authConfig.serviceAccountPath,
+          scopes: ['https://www.googleapis.com/auth/spreadsheets']
+        });
+        this.auth = auth as unknown as OAuth2Client;
+      } else if (authConfig.clientId && authConfig.clientSecret && authConfig.refreshToken) {
+        // OAuth refresh token
+        this.auth = new google.auth.OAuth2(
+          authConfig.clientId,
+          authConfig.clientSecret
+        );
+        this.auth.setCredentials({
+          refresh_token: authConfig.refreshToken
+        });
+      } else {
+        throw new Error('Invalid auth config. Provide either service account or OAuth credentials.');
+      }
+
+      this.sheets = google.sheets({ version: 'v4', auth: this.auth });
+    } catch (error) {
+      throw new Error(`Failed to initialize Sheets auth: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**
@@ -34,7 +89,45 @@ export class SheetsClient {
       return;
     }
 
-    throw new Error('Google Sheets API integration not implemented. Use fallback mode or implement OAuth2 authentication.');
+    if (!this.sheets || !this.spreadsheetId) {
+      throw new Error('Sheets client not initialized. Provide auth config or use fallback mode.');
+    }
+
+    try {
+      const values = [
+        [
+          row.gmail_id,
+          row.thread_id,
+          row.received_at,
+          row.from,
+          row.subject,
+          row.snippet,
+          row.intent,
+          row.intent_p,
+          row.next_action,
+          row.next_action_p,
+          row.escalate,
+          row.escalate_p,
+          row.reason_code,
+          row.status,
+          row.model,
+          row.processed_at
+        ]
+      ];
+
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: this.spreadsheetId,
+        range: this.range,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values
+        }
+      });
+
+      console.log(`✓ Row appended to Google Sheets: ${this.spreadsheetId}`);
+    } catch (error) {
+      throw new Error(`Failed to append to Google Sheets: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**
@@ -81,6 +174,29 @@ export class SheetsClient {
       console.error('Failed to write local output:', error);
       throw error;
     }
+  }
+
+  /**
+   * 環境変数から認証設定を構築
+   */
+  static buildAuthConfigFromEnv(): AuthConfig | undefined {
+    const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+
+    if (serviceAccountJson || serviceAccountPath || (clientId && clientSecret && refreshToken)) {
+      return {
+        serviceAccountJson,
+        serviceAccountPath,
+        clientId,
+        clientSecret,
+        refreshToken
+      };
+    }
+
+    return undefined;
   }
 
   /**
