@@ -1,0 +1,9 @@
+{
+  "gmail_id": "fixture-001",
+  "thread_id": "fixture-thread-001",
+  "received_at": "2026-09-20T00:00:00+09:00",
+  "from": "customer@example.com",
+  "subject": "注文した商品の配送状況を知りたい",
+  "snippet": "先日注文した商品がいつ届くか教えてください。注文番号は REDACTED です。",
+  "labels": ["INBOX"]
+}
